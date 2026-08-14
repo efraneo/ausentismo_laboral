@@ -15,10 +15,56 @@ def _check_password(p: str, h: str) -> bool:
     except: 
         return False
 
-def registrar_usuario(usuario, nombre, correo, clave, identificacion="", cargo=""):
+def login(usuario, clave):
+    # 1. VALIDACIÓN DIRECTA PARA EL ADMINISTRADOR PRINCIPAL
+    # Compara con ADMIN_DEFAULT que viene de config.py (que a su vez lee st.secrets)
+    if usuario == ADMIN_DEFAULT["usuario"] and clave == ADMIN_DEFAULT["clave"]:
+        admin_data = {
+            "id": 0,
+            "usuario": ADMIN_DEFAULT["usuario"],
+            "nombre": ADMIN_DEFAULT["nombre"],
+            "correo": ADMIN_DEFAULT.get("correo", "admin@local.com"),
+            "perfil": ADMIN_DEFAULT["perfil"],
+            "cargo": ADMIN_DEFAULT["cargo"],
+            "identificacion": ADMIN_DEFAULT["identificacion"],
+            "caducidad": ADMIN_DEFAULT["caducidad"],
+            "ingresos_sistema": 999, # Simulado para la vista
+            "estado": "aprobado"
+        }
+        return True, "Login admin exitoso", admin_data
+    
+    # 2. LOGIN NORMAL PARA LOS DEMÁS USUARIOS (VÍA SUPABASE)
     sb = get_supabase()
     try:
-        # Validar duplicados
+        resp = sb.table("usuarios").select("*").eq("usuario", usuario).execute()
+        if not resp.data: 
+            return False, "Usuario o clave incorrecta.", None
+        
+        row = resp.data[0]
+        if not _check_password(clave, row["clave_hash"]): 
+            return False, "Usuario o clave incorrecta.", None
+        
+        if row["estado"] != "aprobado": 
+            return False, f"Tu cuenta está: {row['estado']}. Contacta al administrador.", None
+        
+        try:
+            sb.table("usuarios").update({
+                "ingresos_sistema": (row.get("ingresos_sistema") or 0) + 1,
+                "ultimo_ingreso": datetime.now(timezone.utc).isoformat(),
+            }).eq("id", row["id"]).execute()
+        except Exception:
+            pass 
+        
+        return True, "Login exitoso", row
+    except Exception as e:
+        return False, f"Error de base de datos en login: {str(e)}", None
+
+def registrar_usuario(usuario, nombre, correo, clave, identificacion="", cargo=""):
+    if usuario == ADMIN_DEFAULT["usuario"]:
+        return False, "Este usuario está reservado para el sistema."
+
+    sb = get_supabase()
+    try:
         if sb.table("usuarios").select("id").eq("usuario", usuario).execute().data:
             return False, "El usuario ya existe."
         if correo and sb.table("usuarios").select("id").eq("correo", correo).execute().data:
@@ -44,13 +90,10 @@ def registrar_usuario(usuario, nombre, correo, clave, identificacion="", cargo="
         if correo: 
             enviar_codigo_2fa(correo, nombre, codigo)
         
-        # Notificar al Admin
         notificar_admin_registro(nombre, usuario, correo)
         
         return True, f"Registro exitoso. Se envió código 2FA a {correo}."
-    
     except Exception as e:
-        # Capturamos el error real de Supabase para mostrarlo
         return False, f"Error de base de datos al registrar: {str(e)}"
 
 def verificar_2fa(usuario, codigo):
@@ -78,42 +121,22 @@ def verificar_2fa(usuario, codigo):
         }).eq("usuario", usuario).execute()
         
         return True, "Correo verificado. Un administrador aprobará tu cuenta."
-    
     except Exception as e:
         return False, f"Error al verificar 2FA: {str(e)}"
 
-def login(usuario, clave):
-    sb = get_supabase()
-    try:
-        resp = sb.table("usuarios").select("*").eq("usuario", usuario).execute()
-        if not resp.data: 
-            return False, "Usuario no encontrado.", None
-        
-        row = resp.data[0]
-        if not _check_password(clave, row["clave_hash"]): 
-            return False, "Contraseña incorrecta.", None
-        
-        if row["estado"] != "aprobado": 
-            return False, f"Tu cuenta está: {row['estado']}. Contacta al administrador.", None
-        
-        # Actualizar contador
-        sb.table("usuarios").update({
-            "ingresos_sistema": (row.get("ingresos_sistema") or 0) + 1,
-            "ultimo_ingreso": datetime.now(timezone.utc).isoformat(),
-        }).eq("id", row["id"]).execute()
-        
-        return True, "Login exitoso", row
-    
-    except Exception as e:
-        return False, f"Error de base de datos en login: {str(e)}", None
-
 def aprobar_usuario(user_id):
-    get_supabase().table("usuarios").update({"estado": "aprobado"}).eq("id", user_id).execute()
-    return True
+    try:
+        get_supabase().table("usuarios").update({"estado": "aprobado"}).eq("id", user_id).execute()
+        return True
+    except Exception:
+        return False
 
 def rechazar_usuario(user_id):
-    get_supabase().table("usuarios").update({"estado": "rechazado"}).eq("id", user_id).execute()
-    return True
+    try:
+        get_supabase().table("usuarios").update({"estado": "rechazado"}).eq("id", user_id).execute()
+        return True
+    except Exception:
+        return False
 
 def reenviar_2fa(usuario):
     sb = get_supabase()
@@ -138,6 +161,5 @@ def reenviar_2fa(usuario):
             enviar_codigo_2fa(row["correo"], row["nombre"], codigo)
         
         return True, "Código reenviado."
-    
     except Exception as e:
         return False, f"Error al reenviar: {str(e)}"

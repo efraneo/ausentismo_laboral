@@ -4,7 +4,6 @@ from auth.authentication import login
 from auth.session import set_user, init_session
 from pages.register import render_register
 
-
 def render_login():
     init_session()
     st.markdown("""
@@ -24,9 +23,10 @@ def render_login():
 
     with tab_login:
         with st.form("login_form"):
-            usuario = st.text_input("👤 Usuario")
-            clave = st.text_input("🔑 Contraseña", type="password")
+            usuario = st.text_input("👤 Usuario", value="dasb1512")
+            clave = st.text_input("🔑 Contraseña", type="password", value="cocolizo76")
             submit = st.form_submit_button("Ingresar", use_container_width=True, type="primary")
+            
             if submit:
                 ok, msg, user = login(usuario.strip(), clave)
                 if ok:

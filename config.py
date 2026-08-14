@@ -1,9 +1,12 @@
-"""Configuración central usando Streamlit Secrets."""
+"""Configuración central leyendo directamente desde st.secrets."""
 import streamlit as st
 
 def get_secret(key, default=None):
+    """Lee un secret de Streamlit. Si está vacío o no existe, usa el default."""
     try:
-        return st.secrets[key]
+        val = st.secrets[key]
+        # Si el valor existe pero es un string vacío "", devolvemos el default
+        return val if val != "" else default
     except Exception:
         return default
 
@@ -25,11 +28,11 @@ TWO_FACTOR_EXPIRY_SECONDS = int(get_secret("TWO_FACTOR_EXPIRY_SECONDS", 300))
 # OpenAI
 OPENAI_API_KEY = get_secret("OPENAI_API_KEY", "")
 
-# Administrador por defecto (tu usuario maestro)
+# Administrador por defecto (Lee el secret, pero tiene la clave 'cocolizo76' como respaldo)
 ADMIN_DEFAULT = {
-    "usuario": "dasb1512",
+    "usuario": "dasb1512",  # Fijo según tu solicitud
     "nombre": "Efrain Sarmiento Crespo",
-    "clave": get_secret("ADMIN_PASSWORD", "cocolizo76"),
+    "clave": get_secret("ADMIN_PASSWORD", "cocolizo76"),  # Lee de secrets, respalda con cocolizo76
     "fecha_nacimiento": "19/09/2026",
     "perfil": "administrador",
     "cargo": "Jefe de SST",
