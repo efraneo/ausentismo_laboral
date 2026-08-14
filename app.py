@@ -1,13 +1,13 @@
 """Aplicación principal - Dashboard de Ausentismo Laboral SST."""
 import streamlit as st
 from auth.session import init_session, is_logged_in, is_admin, current_user, logout
-from pages.login import render_login
-from pages.dashboard import render_dashboard
-from pages.ausentismo import render_ausentismo
-from pages.permisos import render_permisos
-from pages.trabajadores import render_trabajadores
-from pages.emo import render_emo
-from pages.admin import render_admin
+from views.login import render_login
+from views.dashboard import render_dashboard
+from views.ausentismo import render_ausentismo
+from views.permisos import render_permisos
+from views.trabajadores import render_trabajadores
+from views.emo import render_emo
+from views.admin import render_admin
 
 st.set_page_config(
     page_title="Dashboard Ausentismo SST",
