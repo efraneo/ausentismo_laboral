@@ -2,7 +2,7 @@
 import streamlit as st
 from auth.authentication import login
 from auth.session import set_user, init_session
-from views.register import render_register  # <--- CAMBIA 'pages' POR 'views'
+from views.register import render_register
 
 def render_login():
     init_session()
@@ -23,8 +23,9 @@ def render_login():
 
     with tab_login:
         with st.form("login_form"):
-            usuario = st.text_input("👤 Usuario", value="dasb1512")
-            clave = st.text_input("🔑 Contraseña", type="password", value="cocolizo76")
+            # Se eliminaron los 'value' para que los campos salgan vacíos
+            usuario = st.text_input("👤 Usuario")
+            clave = st.text_input("🔑 Contraseña", type="password")
             submit = st.form_submit_button("Ingresar", use_container_width=True, type="primary")
             
             if submit:
