@@ -3,13 +3,18 @@ import pandas as pd
 from database.supabase_client import get_supabase
 
 
-def cargar_excel_ausentismo(ruta_excel: str):
+def cargar_excel_ausentismo(ruta_excel):
     """Carga la hoja AUSENTISMO del Excel a Supabase."""
-    df = pd.read_excel(ruta_excel, sheet_name="AUSENTISMO", header=4)
-    df = df.dropna(how="all")
-    df = df.loc[:, ~df.columns.str.contains("^Unnamed")]
+    try:
+        df = pd.read_excel(ruta_excel, sheet_name="AUSENTISMO", header=4)
+        df = df.dropna(how="all")
+        df = df.loc[:, ~df.columns.str.contains("^Unnamed")]
+    except Exception as e:
+        return 0, f"Error leyendo hoja AUSENTISMO: {e}"
+
     sb = get_supabase()
     insertados = 0
+    errores = 0
     for _, r in df.iterrows():
         cedula = str(r.get("CEDULA", "")).strip()
         if not cedula or cedula == "nan":
@@ -35,17 +40,29 @@ def cargar_excel_ausentismo(ruta_excel: str):
                 "dia_semana": str(r.get("DIA", "")).strip(),
             }).execute()
             insertados += 1
-        except Exception as e:
-            print(f"Error fila ausentismo: {e}")
-    return insertados
+        except Exception:
+            errores += 1
+    msg = f"✅ {insertados} registros de ausentismo cargados."
+    if errores > 0:
+        msg += f" ⚠️ {errores} filas con error (se omitieron)."
+    return insertados, msg
 
 
-def cargar_excel_base_datos(ruta_excel: str):
-    """Carga la hoja BASE DATOS (trabajadores) a Supabase."""
-    df = pd.read_excel(ruta_excel, sheet_name="BASE DATOS", header=1)
-    df = df.dropna(how="all")
+def cargar_excel_base_datos(ruta_excel):
+    """Carga la hoja BASE DATOS (trabajadores) del Excel a Supabase.
+    Asigna automáticamente estado 'Vinculado' si no existe."""
+    try:
+        # La hoja BASE DATOS tiene los números de columna en la fila 0
+        # y los nombres reales en la fila 1
+        df = pd.read_excel(ruta_excel, sheet_name="BASE DATOS", header=1)
+        df = df.dropna(how="all")
+    except Exception as e:
+        return 0, f"Error leyendo hoja BASE DATOS: {e}"
+
     sb = get_supabase()
     insertados = 0
+    actualizados = 0
+    errores = 0
     for _, r in df.iterrows():
         ident = str(r.get("IDENTIFICACION", "")).strip()
         if not ident or ident == "nan":
@@ -67,39 +84,61 @@ def cargar_excel_base_datos(ruta_excel: str):
             "contacto": str(r.get("CONTACTO", "")).strip(),
             "correo_personal": str(r.get("CORREO PERSONAL", "")).strip(),
             "tel_familiar": str(r.get("TEL. FAMILIAR", "")).strip(),
-            "hipertension_arterial": str(r.get("HIPERTENSION ARTERIAL", "NO")).strip(),
-            "obesidad": str(r.get("OBESIDAD", "NO")).strip(),
-            "diabetes": str(r.get("DIABETES", "NO")).strip(),
-            "cardiopatia": str(r.get("CARDIOPATIA", "NO")).strip(),
-            "hipotiroidismo": str(r.get("HIPOTIROIDISMO", "NO")).strip(),
-            "dislipidemia": str(r.get("DISLIPIDEMIA", "NO")).strip(),
-            "enfermedad_renal": str(r.get("ENFERMEDAD RENAL", "NO")).strip(),
-            "fumador": str(r.get("FUMADOR", "NO")).strip(),
-            "enfermedad_pulmonar": str(r.get("ENFERMEDAD PULMONAR", "NO")).strip(),
-            "estado": "Vinculado",
-            "emo_ingreso": "Pendiente",
-            "emo_periodico": "Pendiente",
-            "emo_retiro": "Pendiente",
+            "hipertension_arterial": str(r.get("HIPERTENSION ARTERIAL", "NO")).strip().upper(),
+            "obesidad": str(r.get("OBESIDAD", "NO")).strip().upper(),
+            "diabetes": str(r.get("DIABETES", "NO")).strip().upper(),
+            "cardiopatia": str(r.get("CARDIOPATIA", "NO")).strip().upper(),
+            "hipotiroidismo": str(r.get("HIPOTIROIDISMO", "NO")).strip().upper(),
+            "dislipidemia": str(r.get("DISLIPIDEMIA", "NO")).strip().upper(),
+            "enfermedad_renal": str(r.get("ENFERMEDAD RENAL", "NO")).strip().upper(),
+            "fumador": str(r.get("FUMADOR", "NO")).strip().upper(),
+            "enfermedad_pulmonar": str(r.get("ENFERMEDAD PULMONAR", "NO")).strip().upper(),
+            "estado": "Vinculado",  # Siempre se asigna Vinculado al cargar
         }
         try:
-            # upsert por identificacion
-            existing = sb.table("trabajadores").select("id").eq("identificacion", ident).execute()
+            existing = sb.table("trabajadores").select("id, estado").eq("identificacion", ident).execute()
             if existing.data:
+                # Si ya existe, preservar el estado actual (no sobrescribir Desvinculado)
+                estado_actual = existing.data[0].get("estado", "Vinculado")
+                data["estado"] = estado_actual
+                # Preservar EMO si ya existen
+                emo_ing = existing.data[0].get("emo_ingreso", "Pendiente")
+                emo_per = existing.data[0].get("emo_periodico", "Pendiente")
+                emo_ret = existing.data[0].get("emo_retiro", "Pendiente")
+                data["emo_ingreso"] = emo_ing
+                data["emo_periodico"] = emo_per
+                data["emo_retiro"] = emo_ret
                 sb.table("trabajadores").update(data).eq("identificacion", ident).execute()
+                actualizados += 1
             else:
+                # Si es nuevo, asignar Vinculado y EMO Pendiente
+                data["emo_ingreso"] = "Pendiente"
+                data["emo_periodico"] = "Pendiente"
+                data["emo_retiro"] = "Pendiente"
                 sb.table("trabajadores").insert(data).execute()
-            insertados += 1
-        except Exception as e:
-            print(f"Error fila trabajador: {e}")
-    return insertados
+                insertados += 1
+        except Exception:
+            errores += 1
+
+    msg = f"✅ {insertados} trabajadores nuevos cargados."
+    if actualizados > 0:
+        msg += f" 🔄 {actualizados} trabajadores actualizados."
+    if errores > 0:
+        msg += f" ⚠️ {errores} filas con error."
+    return insertados + actualizados, msg
 
 
-def cargar_excel_permisos(ruta_excel: str):
+def cargar_excel_permisos(ruta_excel):
     """Carga la hoja Formato de permisos laborales a Supabase."""
-    df = pd.read_excel(ruta_excel, sheet_name="Formato", header=1)
-    df = df.dropna(how="all")
+    try:
+        df = pd.read_excel(ruta_excel, sheet_name="Formato", header=1)
+        df = df.dropna(how="all")
+    except Exception as e:
+        return 0, f"Error leyendo hoja Formato: {e}"
+
     sb = get_supabase()
     insertados = 0
+    errores = 0
     for _, r in df.iterrows():
         cedula = str(r.get("CEDULA", "")).strip()
         if not cedula or cedula == "nan":
@@ -122,6 +161,9 @@ def cargar_excel_permisos(ruta_excel: str):
                 "mes": str(r.get("MES", "")).strip(),
             }).execute()
             insertados += 1
-        except Exception as e:
-            print(f"Error fila permiso: {e}")
-    return insertados
+        except Exception:
+            errores += 1
+    msg = f"✅ {insertados} permisos laborales cargados."
+    if errores > 0:
+        msg += f" ⚠️ {errores} filas con error."
+    return insertados, msg
