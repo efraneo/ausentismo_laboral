@@ -43,10 +43,7 @@ def kpi_desvinculados(df: pd.DataFrame) -> int:
 
 
 def kpi_emo_pendientes(df: pd.DataFrame) -> int:
-    if df.empty:
+    if df.empty or "emo_periodico" not in df.columns:
         return 0
-    pend = 0
-    for c in ["emo_ingreso", "emo_periodico", "emo_retiro"]:
-        if c in df.columns:
-            pend += (df[c].astype(str).str.lower() == "pendiente").sum()
-    return int(pend)
+    # Contar solo los EMO Periódicos que estén estrictamente "Pendiente"
+    return int((df["emo_periodico"].astype(str).str.lower() == "pendiente").sum())
