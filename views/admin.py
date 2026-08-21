@@ -7,7 +7,6 @@ from utils.helpers import fetch_usuarios, fetch_trabajadores
 from utils.data_loader import (cargar_excel_ausentismo, cargar_excel_base_datos,
                                 cargar_excel_permisos)
 
-
 def render_admin():
     st.markdown("## ⚙️ Panel de Administración")
     if not is_admin():
@@ -75,19 +74,25 @@ def render_admin():
                 with st.spinner("Procesando ausentismo..."):
                     f1.seek(0)
                     n, msg = cargar_excel_ausentismo(f1)
-                    st.success(msg)
+                    if n > 0:
+                        st.success(msg)
+                    else:
+                        st.error(msg)  # <-- Mostrar error en rojo
 
             if btn_tra:
                 with st.spinner("Procesando trabajadores..."):
                     f1.seek(0)
                     n, msg = cargar_excel_base_datos(f1)
-                    st.success(msg)
+                    if n > 0:
+                        st.success(msg)
+                    else:
+                        st.error(msg)  # <-- Mostrar error en rojo
 
         st.markdown("---")
 
         # ========== ARCHIVO 2: PERMISOS ==========
         st.markdown("#### 📄 Archivo: REGISTRO DE PERMISO LABORAL 2026.xlsx")
-        st.caption("Este archivo contiene la hoja 'Formato' con los permisos laborales.")
+        st.caption("Este archivo contiene la hoja 'FORMATO' con los permisos laborales.")
 
         f2 = st.file_uploader(
             "👉 Arrastra o examina el archivo de Permisos aquí",
@@ -102,34 +107,27 @@ def render_admin():
                 with st.spinner("Procesando permisos..."):
                     f2.seek(0)
                     n, msg = cargar_excel_permisos(f2)
-                    st.success(msg)
+                    if n > 0:
+                        st.success(msg)
+                    else:
+                        st.error(msg)  # <-- Mostrar error en rojo
 
         st.markdown("---")
 
         # ========== TABLA DE TRABAJADORES CARGADOS ==========
         st.markdown("### 📋 Trabajadores cargados en la base de datos")
-        st.caption("Tabla con el estado actual de cada trabajador. Si no tiene estado, se asignó 'Vinculado' automáticamente.")
-
         try:
             df_tra = fetch_trabajadores()
             if df_tra.empty:
                 st.warning("⚠️ No hay trabajadores cargados. Sube un archivo y presiona el botón 'Cargar hoja BASE DATOS'.")
             else:
-                # Mostrar columnas principales
                 show_cols = ["identificacion", "apellidos_nombres", "cargo", "area",
                            "fecha_ingreso", "eps", "estado", "emo_ingreso",
                            "emo_periodico", "emo_retiro"]
                 show_cols = [c for c in show_cols if c in df_tra.columns]
 
-                # Resaltar el estado con colores
-                st.dataframe(
-                    df_tra[show_cols],
-                    use_container_width=True,
-                    hide_index=True,
-                    height=500
-                )
+                st.dataframe(df_tra[show_cols], use_container_width=True, hide_index=True, height=500)
 
-                # Mostrar resumen de estados
                 st.markdown("---")
                 c1, c2, c3 = st.columns(3)
                 if "estado" in df_tra.columns:
@@ -140,14 +138,8 @@ def render_admin():
                     c2.metric("✅ Vinculados", vinculados)
                     c3.metric("🚪 Desvinculados", desvinculados)
 
-                # Descargar CSV
                 st.markdown("---")
                 csv = df_tra.to_csv(index=False).encode()
-                st.download_button(
-                    "⬇️ Descargar tabla de trabajadores (CSV)",
-                    csv,
-                    file_name="trabajadores.csv",
-                    mime="text/csv"
-                )
+                st.download_button("⬇️ Descargar tabla de trabajadores (CSV)", csv, file_name="trabajadores.csv", mime="text/csv")
         except Exception as e:
             st.error(f"Error al cargar la tabla de trabajadores: {e}")
