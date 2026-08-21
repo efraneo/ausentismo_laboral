@@ -6,6 +6,8 @@ from auth.authentication import aprobar_usuario, rechazar_usuario
 from utils.helpers import fetch_usuarios, fetch_trabajadores
 from utils.data_loader import (cargar_excel_ausentismo, cargar_excel_base_datos,
                                 cargar_excel_permisos)
+from utils.data_loader import (cargar_excel_ausentismo, cargar_excel_base_datos,
+                                cargar_excel_permisos, cargar_excel_emo)
 
 def render_admin():
     st.markdown("## ⚙️ Panel de Administración")
@@ -137,6 +139,30 @@ def render_admin():
                     c1.metric("👥 Total Trabajadores", total)
                     c2.metric("✅ Vinculados", vinculados)
                     c3.metric("🚪 Desvinculados", desvinculados)
+
+        # ========== ARCHIVO 3: EMO ==========
+        st.markdown("#### 📄 Archivo: REGISTRO EMO 2026.xlsx")
+        st.caption("Este archivo contiene la hoja 'FORMATO' con el estado de los EMO.")
+
+        f3 = st.file_uploader(
+            "👉 Arrastra o examina el archivo de EMO aquí",
+            type=["xlsx"],
+            key="uploader_emo"
+        )
+
+        if f3 is not None:
+            st.success(f"📎 Archivo cargado: {f3.name}")
+
+            if st.button("4️⃣ Cargar hoja de EMO", use_container_width=True, type="primary"):
+                with st.spinner("Procesando EMO y cruzando información..."):
+                    f3.seek(0)
+                    n, msg = cargar_excel_emo(f3)
+                    if n > 0:
+                        st.success(msg)
+                    else:
+                        st.error(msg)
+
+        st.markdown("---")
 
                 st.markdown("---")
                 csv = df_tra.to_csv(index=False).encode()

@@ -239,3 +239,83 @@ def cargar_excel_permisos(file):
     if errores > 0:
         msg += f" ⚠️ {errores} filas con error. Detalle: {error_detalle}"
     return insertados, msg
+
+def cargar_excel_emo(file):
+    """Carga la hoja FORMATO de EMO a Supabase, cruzando estado y cumplimiento."""
+    hoja = _buscar_hoa(file, "FORMATO")
+    if not hoja:
+        return 0, "❌ No se encontró la hoja 'FORMATO' en el archivo EMO."
+    
+    df, err = _leer_excel_automatico(file, hoja, "IDENTIFICACION")
+    if err:
+        return 0, err
+
+    sb = get_supabase()
+    insertados = 0
+    actualizados = 0
+    errores = 0
+    error_detalle = ""
+    
+    for _, r in df.iterrows():
+        ident = str(r.get("IDENTIFICACION", "")).strip()
+        if not ident or ident == "nan":
+            continue
+            
+        # Lógica de cruce de información para EMO
+        estado_excel = str(r.get("ESTADO DEL EMO", "")).strip()
+        cumplimiento = str(r.get("CUMPLIMIENTO", "")).strip().upper()
+        
+        # Si el EMO tiene algo escrito en el Excel, significa que se realizó
+        if estado_excel and estado_excel.lower() != "nan":
+            estado_calculado = "Realizado"
+        else:
+            # Si está en blanco, cruzamos con la columna CUMPLIMIENTO
+            # Asumimos que si dice "NO" o "NO APLICA" lleva menos de un año
+            if "NO" in cumplimiento or "N/A" in cumplimiento or "NO APLICA" in cumplimiento:
+                estado_calculado = "No Aplica"
+            else:
+                estado_calculado = "Pendiente"
+
+        data = {
+            "identificacion": ident,
+            "apellidos_nombres": str(r.get("APELLIDOS Y NOMBRES", "")).strip(),
+            "cargo": str(r.get("CARGO", "")).strip(),
+            "area": str(r.get("AREA", "")).strip(),
+            "nivel_escolaridad": str(r.get("NIVEL DE ESCOLARIDAD", "")).strip(),
+            "fecha_ingreso": str(r.get("F. INICIO", "")).strip(),
+            "eps": str(r.get("EPS", "")).strip(),
+            "afp": str(r.get("AFP", "")).strip(),
+            "sexo": str(r.get("SEXO", "")).strip(),
+            "edad": str(r.get("EDAD", "")).strip(),
+            "fecha_nacimiento": str(r.get("F. NACIMIENTO", "")).strip(),
+            "direccion": str(r.get("DIRECCION", "")).strip(),
+            "contacto": str(r.get("CONTACTO", "")).strip(),
+            "correo_personal": str(r.get("CORREO, PERSONAL", r.get("CORREO PERSONAL", ""))).strip(),
+            "tel_familiar": str(r.get("TEL. FAMILIAR", "")).strip(),
+            "estado_emo_excel": estado_excel,
+            "cumplimiento": str(r.get("CUMPLIMIENTO", "")).strip(),
+            "estado_calculado": estado_calculado
+        }
+        
+        try:
+            existing = sb.table("registro_emo").select("id").eq("identificacion", ident).execute()
+            if existing.data:
+                sb.table("registro_emo").update(data).eq("identificacion", ident).execute()
+                actualizados += 1
+            else:
+                sb.table("registro_emo").insert(data).execute()
+                insertados += 1
+        except Exception as e:
+            if errores == 0:
+                error_detalle = str(e)
+            errores += 1
+
+    if insertados == 0 and actualizados == 0 and errores == 0:
+        return 0, "⚠️ El archivo se leyó, pero no hay filas con IDENTIFICACION válida."
+        
+    msg = f"✅ {insertados} registros EMO nuevos cargados."
+    if actualizados > 0:
+        msg += f" 🔄 {actualizados} registros actualizados."
+    if errores > 0:
+        msg += f" ⚠️ {errores} filas con error. Detalle: {error_detalle}"
+    return insertados + actualizados, msg
