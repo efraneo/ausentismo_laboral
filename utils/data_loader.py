@@ -7,7 +7,6 @@ def _buscar_hoa(file, target_name: str) -> str | None:
     """Busca el nombre de la hoja sin importar mayúsculas/minúsculas ni espacios."""
     try:
         file.seek(0)
-        # Leer contenido en memoria para no consumir el buffer
         if hasattr(file, 'read'):
             content = file.read()
             xls = pd.ExcelFile(BytesIO(content))
@@ -26,15 +25,21 @@ def cargar_excel_ausentismo(file):
     """Carga la hoja AUSENTISMO del Excel a Supabase."""
     hoja = _buscar_hoa(file, "AUSENTISMO")
     if not hoja:
-        return 0, "❌ No se encontró la hoja 'AUSENTISMO'. Revisa que el nombre esté correcto."
+        return 0, "❌ No se encontró la hoja 'AUSENTISMO'."
     
     try:
         file.seek(0)
         df = pd.read_excel(file, sheet_name=hoja, header=4)
         df = df.dropna(how="all")
+        # Limpiar nombres de columnas: quitar espacios invisibles y saltos de línea
+        df.columns = df.columns.astype(str).str.strip()
         df = df.loc[:, ~df.columns.str.contains("^Unnamed")]
     except Exception as e:
         return 0, f"❌ Error leyendo hoja AUSENTISMO: {e}"
+
+    # --- DEBUG: Verificar si la columna existe ---
+    if "CEDULA" not in df.columns:
+        return 0, f"❌ No se encontró la columna 'CEDULA'. Las columnas leídas son: {list(df.columns)}"
 
     sb = get_supabase()
     insertados = 0
@@ -46,7 +51,6 @@ def cargar_excel_ausentismo(file):
         if not cedula or cedula == "nan":
             continue
         try:
-            # Limpieza segura de días perdidos
             dias_val = r.get("DIAS PERDIDOS", 0)
             try:
                 dias_perdidos = int(float(dias_val)) if str(dias_val).strip() != "" else 0
@@ -74,10 +78,13 @@ def cargar_excel_ausentismo(file):
             }).execute()
             insertados += 1
         except Exception as e:
-            if errores == 0: # Guardar el primer error para mostrarlo en la UI
+            if errores == 0: 
                 error_detalle = str(e)
             errores += 1
             
+    if insertados == 0 and errores == 0:
+        return 0, "⚠️ No se encontraron filas con cédula válida. El archivo se leyó pero está vacío o no tiene cédulas."
+        
     msg = f"✅ {insertados} registros de ausentismo cargados."
     if errores > 0:
         msg += f" ⚠️ {errores} filas con error. Detalle del 1er error: {error_detalle}"
@@ -88,14 +95,19 @@ def cargar_excel_base_datos(file):
     """Carga la hoja BASE DATOS (trabajadores) a Supabase."""
     hoja = _buscar_hoa(file, "BASE DATOS")
     if not hoja:
-        return 0, "❌ No se encontró la hoja 'BASE DATOS'. Revisa el nombre."
+        return 0, "❌ No se encontró la hoja 'BASE DATOS'."
     
     try:
         file.seek(0)
         df = pd.read_excel(file, sheet_name=hoja, header=1)
         df = df.dropna(how="all")
+        df.columns = df.columns.astype(str).str.strip()
     except Exception as e:
         return 0, f"❌ Error leyendo hoja BASE DATOS: {e}"
+
+    # --- DEBUG: Verificar si la columna existe ---
+    if "IDENTIFICACION" not in df.columns:
+        return 0, f"❌ No se encontró la columna 'IDENTIFICACION'. Las columnas leídas son: {list(df.columns)}"
 
     sb = get_supabase()
     insertados = 0
@@ -156,27 +168,34 @@ def cargar_excel_base_datos(file):
                 error_detalle = str(e)
             errores += 1
 
+    if insertados == 0 and actualizados == 0 and errores == 0:
+        return 0, "⚠️ No se encontraron filas con 'IDENTIFICACION' válida. Revisa el archivo."
+        
     msg = f"✅ {insertados} trabajadores nuevos cargados."
     if actualizados > 0:
         msg += f" 🔄 {actualizados} trabajadores actualizados."
     if errores > 0:
-        msg += f" ⚠️ {errores} filas con error. Detalle del 1er error: {error_detalle}"
+        msg += f" ⚠️ {errores} filas con error. Detalle: {error_detalle}"
     return insertados + actualizados, msg
 
 
 def cargar_excel_permisos(file):
     """Carga la hoja FORMATO de permisos laborales a Supabase."""
-    # Buscamos "FORMATO" que coincide con tu Excel en mayúsculas
     hoja = _buscar_hoa(file, "FORMATO")
     if not hoja:
-        return 0, "❌ No se encontró la hoja 'FORMATO'. Revisa el nombre."
+        return 0, "❌ No se encontró la hoja 'FORMATO'."
     
     try:
         file.seek(0)
         df = pd.read_excel(file, sheet_name=hoja, header=1)
         df = df.dropna(how="all")
+        df.columns = df.columns.astype(str).str.strip()
     except Exception as e:
         return 0, f"❌ Error leyendo hoja FORMATO: {e}"
+
+    # --- DEBUG: Verificar si la columna existe ---
+    if "CEDULA" not in df.columns:
+        return 0, f"❌ No se encontró la columna 'CEDULA'. Las columnas leídas son: {list(df.columns)}"
 
     sb = get_supabase()
     insertados = 0
@@ -210,7 +229,10 @@ def cargar_excel_permisos(file):
                 error_detalle = str(e)
             errores += 1
             
+    if insertados == 0 and errores == 0:
+        return 0, "⚠️ No se encontraron filas con cédula válida en la hoja FORMATO."
+        
     msg = f"✅ {insertados} permisos laborales cargados."
     if errores > 0:
-        msg += f" ⚠️ {errores} filas con error. Detalle del 1er error: {error_detalle}"
+        msg += f" ⚠️ {errores} filas con error. Detalle: {error_detalle}"
     return insertados, msg
