@@ -76,3 +76,29 @@ def chart_permisos_por_tipo(df: pd.DataFrame):
     fig = px.pie(agg, names="tipo_permiso", values="cantidad",
                  title="⏰ Distribución de Permisos por Tipo", hole=0.4)
     return fig
+
+def chart_top_ausentismo_trabajadores(df: pd.DataFrame):
+    if df.empty or "apellidos_nombres" not in df.columns or "dias_perdidos" not in df.columns:
+        return go.Figure()
+    agg = df.groupby("apellidos_nombres")["dias_perdidos"].sum().reset_index()
+    agg = agg.sort_values("dias_perdidos", ascending=False).head(10)
+    fig = px.bar(agg, x="dias_perdidos", y="apellidos_nombres", orientation="h",
+                 color="dias_perdidos", color_continuous_scale="Reds",
+                 title="🏆 Top 10 Trabajadores con más Días de Ausentismo",
+                 labels={"apellidos_nombres": "Trabajador", "dias_perdidos": "Días Perdidos"})
+    fig.update_layout(yaxis={"categoryorder": "total ascending"})
+    return fig
+
+def chart_top_permisos_trabajadores(df: pd.DataFrame):
+    if df.empty or "apellidos_nombres" not in df.columns:
+        return go.Figure()
+    # Convertir horas a numérico por si viene como texto
+    df["horas_num"] = pd.to_numeric(df.get("horas", 0), errors='coerce').fillna(0)
+    agg = df.groupby("apellidos_nombres")["horas_num"].sum().reset_index()
+    agg = agg.sort_values("horas_num", ascending=False).head(10)
+    fig = px.bar(agg, x="horas_num", y="apellidos_nombres", orientation="h",
+                 color="horas_num", color_continuous_scale="Blues",
+                 title="🏆 Top 10 Trabajadores con más Horas de Permiso",
+                 labels={"apellidos_nombres": "Trabajador", "horas_num": "Horas de Permiso"})
+    fig.update_layout(yaxis={"categoryorder": "total ascending"})
+    return fig
