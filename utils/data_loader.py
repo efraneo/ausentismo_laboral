@@ -241,7 +241,7 @@ def cargar_excel_permisos(file):
     return insertados, msg
 
 def cargar_excel_emo(file):
-    """Carga la hoja FORMATO de EMO a Supabase, cruzando estado y cumplimiento."""
+    """Carga la hoja FORMATO de EMO a Supabase, cruzando estado, cumplimiento y tipo de EMO."""
     hoja = _buscar_hoa(file, "FORMATO")
     if not hoja:
         return 0, "❌ No se encontró la hoja 'FORMATO' en el archivo EMO."
@@ -261,16 +261,12 @@ def cargar_excel_emo(file):
         if not ident or ident == "nan":
             continue
             
-        # Lógica de cruce de información para EMO
         estado_excel = str(r.get("ESTADO DEL EMO", "")).strip()
         cumplimiento = str(r.get("CUMPLIMIENTO", "")).strip().upper()
         
-        # Si el EMO tiene algo escrito en el Excel, significa que se realizó
         if estado_excel and estado_excel.lower() != "nan":
             estado_calculado = "Realizado"
         else:
-            # Si está en blanco, cruzamos con la columna CUMPLIMIENTO
-            # Asumimos que si dice "NO" o "NO APLICA" lleva menos de un año
             if "NO" in cumplimiento or "N/A" in cumplimiento or "NO APLICA" in cumplimiento:
                 estado_calculado = "No Aplica"
             else:
@@ -294,7 +290,8 @@ def cargar_excel_emo(file):
             "tel_familiar": str(r.get("TEL. FAMILIAR", "")).strip(),
             "estado_emo_excel": estado_excel,
             "cumplimiento": str(r.get("CUMPLIMIENTO", "")).strip(),
-            "estado_calculado": estado_calculado
+            "estado_calculado": estado_calculado,
+            "tipo_emo": str(r.get("TIPO DE EMO", "")).strip() # <-- NUEVO CAMPO LEÍDO DEL EXCEL
         }
         
         try:
